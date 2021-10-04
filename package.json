@@ -1,23 +1,17 @@
 {
-  "name": "@UNPARALLEL/iot-catalogue-external-service",
+  "name": "iot-catalogue-external-service",
   "description": "Connector with IoT Catalogue queue service",
   "main": "index.js",
   "scripts": {
     "generateDocs": "./node_modules/jsdoc/jsdoc.js -c ./.jsdoc.conf.json -r -d ./docs "
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://gitlab.com/UNPARALLEL/IoT-Catalogue/external-services/iot-catalogue-service-coordinator.git"
-  },
+
   "author": "UNPARALLEL Innovation, lda",
   "license": "ISC",
   "bugs": {
-    "url": "https://gitlab.com/UNPARALLEL/IoT-Catalogue/external-services/iot-catalogue-service-coordinator/issues"
+    "url": "https://github.com/unparallel-innovation/IoT-Catalogue-External-Service/issues"
   },
-  "homepage": "https://gitlab.com/UNPARALLEL/IoT-Catalogue/external-services/iot-catalogue-service-coordinator#readme",
-  "publishConfig": {
-    "@UNPARALLEL:registry": "https://gitlab.com/api/v4/projects/22437126/packages/npm/"
-  },
+  "homepage": "https://github.com/unparallel-innovation/IoT-Catalogue-External-Service",
   "dependencies": {
     "axios": "^0.21.4",
     "crypto": "^1.0.1",
