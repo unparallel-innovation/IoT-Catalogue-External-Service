@@ -8,6 +8,7 @@
 
   "author": "UNPARALLEL Innovation, lda",
   "license": "ISC",
+  "keywords": ["IoT Catalogue","ddp","websockets","meteor"],
   "bugs": {
     "url": "https://github.com/unparallel-innovation/IoT-Catalogue-External-Service/issues"
   },
