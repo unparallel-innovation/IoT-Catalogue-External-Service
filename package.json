@@ -5,10 +5,14 @@
   "scripts": {
     "generateDocs": "./node_modules/jsdoc/jsdoc.js -c ./.jsdoc.conf.json -r -d ./docs "
   },
-
   "author": "UNPARALLEL Innovation, lda",
   "license": "ISC",
-  "keywords": ["IoT Catalogue","ddp","websockets","meteor"],
+  "keywords": [
+    "IoT Catalogue",
+    "ddp",
+    "websockets",
+    "meteor"
+  ],
   "bugs": {
     "url": "https://github.com/unparallel-innovation/IoT-Catalogue-External-Service/issues"
   },
@@ -22,5 +26,5 @@
     "simpleddp-plugin-login": "^4.0.2",
     "ws": "^7.4.1"
   },
-  "version": "2.0.1"
+  "version": "2.0.2"
 }
