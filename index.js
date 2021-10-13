@@ -119,19 +119,18 @@ class Connection extends EventEmmiter{
                 const data = await this.ping()
 
                 if(data?.value!=="up"){
-                    console.log("a")
+                    console.log("Ping failed")
                     this.tryToReconnect()
                 }else{
-                    console.log("b")
+
                     const connectionTime = this.remoteUpSince.getTime()
                     const currentTime = new Date(data.upSince).getTime()
                     if(currentTime > connectionTime){
-                        console.log("c")
+                        console.log("Ping failed")
                         this.tryToReconnect()
                     }
                 }
             }catch(err){
-                console.log("d")
                 console.log("Ping failed")
                 this.tryToReconnect()
             }
