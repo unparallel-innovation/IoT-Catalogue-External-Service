@@ -4,7 +4,9 @@ const ws = require("ws");
 const SimpleDDP = require("simpleddp");
 const crypto = require("crypto");
 const axios = require('axios').default;
-
+const log4js = require("log4js");
+const logger = log4js.getLogger();
+logger.level = "debug";
 const simpleDDPLogin = require("simpleddp-plugin-login").simpleDDPLogin;
 
 /**
@@ -55,7 +57,7 @@ class Connection extends EventEmmiter{
 
         this.ddpConnection = new SimpleDDP(opts,[simpleDDPLogin])
         this.ddpConnection.on("connected",async (info)=>{
-            console.log("Connected to " +  this.socketAddress);
+            logger.info("Connected to " +  this.socketAddress);
             this.remoteUpSince = new Date((await this.ping()).upSince)
             try{
                 await this.ddpConnection.login({userToken:this.hashUserToken()})
@@ -84,7 +86,7 @@ class Connection extends EventEmmiter{
                 collectionSubscription.remove()
             }
             this.collectionSubscription = []
-            console.log("Disconnected from " +  this.socketAddress)
+            logger.info("Disconnected from " +  this.socketAddress)
 
         });
 
@@ -113,25 +115,25 @@ class Connection extends EventEmmiter{
 
         this.setIntervalId = setInterval(async ()=>{
 
-            console.log("ping")
+
             try{
 
                 const data = await this.ping()
 
                 if(data?.value!=="up"){
-                    console.log("Ping failed")
+                    logger.error("Ping failed reconnecting")
                     this.tryToReconnect()
                 }else{
 
                     const connectionTime = this.remoteUpSince.getTime()
                     const currentTime = new Date(data.upSince).getTime()
                     if(currentTime > connectionTime){
-                        console.log("Ping failed")
+                        logger.error("Ping failed reconnecting")
                         this.tryToReconnect()
                     }
                 }
             }catch(err){
-                console.log("Ping failed")
+                logger.error("Ping failed reconnecting")
                 this.tryToReconnect()
             }
         },this.pingInterval*1000)
