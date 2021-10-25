@@ -32,11 +32,13 @@ const ws = require("ws");
 const SimpleDDP = require("simpleddp");
 const crypto = require("crypto");
 const axios = require('axios').default;
-
+const log4js = require("log4js");
+const logger = log4js.getLogger();
+logger.level = "debug";
 const simpleDDPLogin = require("simpleddp-plugin-login").simpleDDPLogin;
 
 /**
- * Establishes a connection with IoT Catalogue, allows subscription with a queue and to the dataset authenticated for the user
+ * Establishes a connection with IoT Catalogue, allows a real time subscription with IoT Catalogue and to the dataset authenticated for the user
  * @extends EventEmmiter
  */
 class Connection extends EventEmmiter{
@@ -64,7 +66,7 @@ class Connection extends EventEmmiter{
         this.connectionProps = connectionProps
         this.collectionHandlers = []
         this.collectionSubscription = []
-        this.pingInterval = 60
+        this.pingInterval = 3
         this.timeout = 60
         if(! this.socketAddress){
             throw {"err":"Missing socketAddress"}
@@ -83,12 +85,12 @@ class Connection extends EventEmmiter{
 
         this.ddpConnection = new SimpleDDP(opts,[simpleDDPLogin])
         this.ddpConnection.on("connected",async (info)=>{
-            console.log("Connected to " +  this.socketAddress);
+            logger.info("Connected to " +  this.socketAddress);
             this.remoteUpSince = new Date((await this.ping()).upSince)
             try{
                 await this.ddpConnection.login({userToken:this.hashUserToken()})
                 await this.getConnectionService()
-                await this.subscribeToQueue()
+                await this.subscribeToExternalServiceCommunication()
                 await this.subscribeToData()
                 this.schedulePing()
             }catch(err){
@@ -104,15 +106,15 @@ class Connection extends EventEmmiter{
                 collectionHandler.stop()
             }
             this.collectionHandlers = []
-            if(this.queueSub){
-                this.queueSub.remove()
-                this.queueSub = null;
+            if(this.actionSub){
+                this.actionSub.remove()
+                this.actionSub = null;
             }
             for(const collectionSubscription of this.collectionSubscription){
                 collectionSubscription.remove()
             }
             this.collectionSubscription = []
-            console.log("Disconnected from " +  this.socketAddress)
+            logger.info("Disconnected from " +  this.socketAddress)
 
         });
 
@@ -141,26 +143,25 @@ class Connection extends EventEmmiter{
 
         this.setIntervalId = setInterval(async ()=>{
 
-            console.log("ping")
+
             try{
 
                 const data = await this.ping()
 
-                if(data?.value!=="up"){
-                    console.log("a")
+                if(data?.value!=="up" ){
+                    logger.error("Ping failed reconnecting")
                     this.tryToReconnect()
                 }else{
-                    console.log("b")
+
                     const connectionTime = this.remoteUpSince.getTime()
                     const currentTime = new Date(data.upSince).getTime()
-                    if(currentTime > connectionTime){
-                        console.log("c")
+                    if(currentTime > connectionTime ){
+                        logger.error("Ping failed reconnecting")
                         this.tryToReconnect()
                     }
                 }
             }catch(err){
-                console.log("d")
-                console.log("Ping failed")
+                logger.error("Ping failed reconnecting")
                 this.tryToReconnect()
             }
         },this.pingInterval*1000)
@@ -178,9 +179,9 @@ class Connection extends EventEmmiter{
         this.collectionHandlers.push(collectionHandler)
     }
 
-    observeQueue(){
+    observeActions(){
+        const onChange = async (collectionName, obj)=>{
 
-        this.observeCollection("queue",async (collectionName, obj)=> {
             const actions = []
             if (obj.added) {
                 actions.push("added")
@@ -201,11 +202,11 @@ class Connection extends EventEmmiter{
             if(obj.removed) {
                 actions.push("removed")
             }
-            this.emit("queueChange",
-                obj,
-                actions
-            )
-        })
+
+
+
+        }
+        this.observeCollection("externalServiceCommunication",onChange)
     }
 
 
@@ -232,10 +233,12 @@ class Connection extends EventEmmiter{
         this.collectionSubscription.push(sub)
     }
 
-    async subscribeToQueue(){
-        this.observeQueue()
-        this.queueSub = this.ddpConnection.subscribe("externalServiceQueue")
-        await this.queueSub.ready()
+    async subscribeToExternalServiceCommunication(){
+        this.observeActions()
+        this.actionSub = this.ddpConnection.subscribe("subscribeToExternalServiceCommunication")
+
+
+        await this.actionSub.ready()
     }
 
 
@@ -271,7 +274,6 @@ class Connection extends EventEmmiter{
     * &lt;ul>
     *   &lt;li>connected&lt;/li>
     *   &lt;li>disconnected&lt;/li>
-    *   &lt;li>queueChange&lt;/li>
      *   &lt;li>actionAdded&lt;/li>
      *   &lt;li>dataChange&lt;/li>
      *   &lt;li>subscribedToService&lt;/li>
@@ -286,24 +288,11 @@ class Connection extends EventEmmiter{
         return super.on(event, callback)
     }
 
-    /**
-     * Attach an event handler function to process the queue updates for the service actions
-     * @param {queueCallback} callback - Callback which receives new data from the subscription
-     *
-     */
-    onQueueChange(callback){
-        return this.on("queueChange",callback)
-    }
-
-    /**
-     * @callback queueCallback
-     * @param {object} queueEntry object describing the action
-     */
 
 
     /**
      *
-     * Notify the external app when actions are added to the queue, the reply is given through a callback
+     * Notify the external app when actions are added, the reply is given through a callback
      *
      *
      * @param {actionAddedCallback} callback Callback that handles actionAdded
@@ -407,7 +396,7 @@ exports.Connection = Connection
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.6</a> on Mon Oct 04 2021 14:52:30 GMT+0100 (Western European Summer Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.6</a> on Mon Oct 25 2021 17:30:19 GMT+0100 (Western European Summer Time)
 </footer>
 
 <script> prettyPrint(); </script>

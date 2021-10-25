@@ -10,7 +10,7 @@ logger.level = "debug";
 const simpleDDPLogin = require("simpleddp-plugin-login").simpleDDPLogin;
 
 /**
- * Establishes a connection with IoT Catalogue, allows subscription with a queue and to the dataset authenticated for the user
+ * Establishes a connection with IoT Catalogue, allows a real time subscription with IoT Catalogue and to the dataset authenticated for the user
  * @extends EventEmmiter
  */
 class Connection extends EventEmmiter{
@@ -62,7 +62,7 @@ class Connection extends EventEmmiter{
             try{
                 await this.ddpConnection.login({userToken:this.hashUserToken()})
                 await this.getConnectionService()
-                await this.subscribeToQueue()
+                await this.subscribeToExternalServiceCommunication()
                 await this.subscribeToData()
                 this.schedulePing()
             }catch(err){
@@ -78,9 +78,9 @@ class Connection extends EventEmmiter{
                 collectionHandler.stop()
             }
             this.collectionHandlers = []
-            if(this.queueSub){
-                this.queueSub.remove()
-                this.queueSub = null;
+            if(this.actionSub){
+                this.actionSub.remove()
+                this.actionSub = null;
             }
             for(const collectionSubscription of this.collectionSubscription){
                 collectionSubscription.remove()
@@ -120,14 +120,14 @@ class Connection extends EventEmmiter{
 
                 const data = await this.ping()
 
-                if(data?.value!=="up"){
+                if(data?.value!=="up" ){
                     logger.error("Ping failed reconnecting")
                     this.tryToReconnect()
                 }else{
 
                     const connectionTime = this.remoteUpSince.getTime()
                     const currentTime = new Date(data.upSince).getTime()
-                    if(currentTime > connectionTime){
+                    if(currentTime > connectionTime ){
                         logger.error("Ping failed reconnecting")
                         this.tryToReconnect()
                     }
@@ -151,9 +151,9 @@ class Connection extends EventEmmiter{
         this.collectionHandlers.push(collectionHandler)
     }
 
-    observeQueue(){
+    observeActions(){
+        const onChange = async (collectionName, obj)=>{
 
-        this.observeCollection("queue",async (collectionName, obj)=> {
             const actions = []
             if (obj.added) {
                 actions.push("added")
@@ -174,11 +174,11 @@ class Connection extends EventEmmiter{
             if(obj.removed) {
                 actions.push("removed")
             }
-            this.emit("queueChange",
-                obj,
-                actions
-            )
-        })
+
+
+
+        }
+        this.observeCollection("externalServiceCommunication",onChange)
     }
 
 
@@ -205,10 +205,12 @@ class Connection extends EventEmmiter{
         this.collectionSubscription.push(sub)
     }
 
-    async subscribeToQueue(){
-        this.observeQueue()
-        this.queueSub = this.ddpConnection.subscribe("externalServiceQueue")
-        await this.queueSub.ready()
+    async subscribeToExternalServiceCommunication(){
+        this.observeActions()
+        this.actionSub = this.ddpConnection.subscribe("subscribeToExternalServiceCommunication")
+
+
+        await this.actionSub.ready()
     }
 
 
@@ -244,7 +246,6 @@ class Connection extends EventEmmiter{
     * <ul>
     *   <li>connected</li>
     *   <li>disconnected</li>
-    *   <li>queueChange</li>
      *   <li>actionAdded</li>
      *   <li>dataChange</li>
      *   <li>subscribedToService</li>
@@ -259,24 +260,11 @@ class Connection extends EventEmmiter{
         return super.on(event, callback)
     }
 
-    /**
-     * Attach an event handler function to process the queue updates for the service actions
-     * @param {queueCallback} callback - Callback which receives new data from the subscription
-     *
-     */
-    onQueueChange(callback){
-        return this.on("queueChange",callback)
-    }
-
-    /**
-     * @callback queueCallback
-     * @param {object} queueEntry object describing the action
-     */
 
 
     /**
      *
-     * Notify the external app when actions are added to the queue, the reply is given through a callback
+     * Notify the external app when actions are added, the reply is given through a callback
      *
      *
      * @param {actionAddedCallback} callback Callback that handles actionAdded
