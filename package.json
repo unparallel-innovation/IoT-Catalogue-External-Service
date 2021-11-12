@@ -1,5 +1,5 @@
 {
-  "name": "iot-catalogue-external-service",
+  "name": "@unparallel/iot-catalogue-external-service",
   "description": "Connector with IoT Catalogue queue service",
   "main": "index.js",
   "scripts": {
