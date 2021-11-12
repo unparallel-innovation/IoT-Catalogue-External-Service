@@ -61,8 +61,9 @@ class Connection extends EventEmmiter{
             this.remoteUpSince = new Date((await this.ping()).upSince)
             try{
                 await this.ddpConnection.login({userToken:this.hashUserToken()})
-                await this.getConnectionService()
-                await this.subscribeToExternalServiceCommunication()
+                await this.registerExternalServiceConnection()
+
+
                 await this.subscribeToData()
                 this.schedulePing()
             }catch(err){
@@ -82,6 +83,12 @@ class Connection extends EventEmmiter{
                 this.actionSub.remove()
                 this.actionSub = null;
             }
+
+            if(this.activeConnectionSub ){
+                this.activeConnectionSub.remove();
+                this.activeConnectionSub = null;
+            }
+
             for(const collectionSubscription of this.collectionSubscription){
                 collectionSubscription.remove()
             }
@@ -197,6 +204,9 @@ class Connection extends EventEmmiter{
         }
 
     }
+
+
+
     async subscribeToCollection(collectionName){
         const fields = this.connectionProps?.dataFields || this.connectionProps?.fields
 
@@ -213,6 +223,30 @@ class Connection extends EventEmmiter{
         await this.actionSub.ready()
     }
 
+    async registerExternalServiceConnection(){
+        this.observeCollection("externalServiceActiveConnections",(collectionName, obj)=>{
+            const res = this.checkNewConnectionState(obj,"serviceAssigned")
+
+            if(res){
+                this.emit("subscribedToService",res.externalService)
+                this.subscribeToExternalServiceCommunication()
+            }
+
+        })
+        this.activeConnectionSub = this.ddpConnection.subscribe("registerExternalServiceConnection",this.serviceDescription)
+        await this.activeConnectionSub.ready()
+
+    }
+
+    checkNewConnectionState(obj, state){
+        if(obj.changed?.prev?.state !== obj.changed?.next?.state  && obj.changed?.next?.state === state){
+            return obj.changed.next
+        }
+
+        if(obj.added?.state === state){
+            return obj.added
+        }
+    }
 
     actionCallback(obj, result, error){
 
@@ -222,12 +256,6 @@ class Connection extends EventEmmiter{
 
     }
 
-    async getConnectionService(){
-        const connectionService = await this.ddpConnection.call("getConnectionService", this.serviceDescription)
-        if(connectionService.serviceFound === true){
-            this.emit("subscribedToService",connectionService)
-        }
-    }
 
     hashUserToken(){
         const hash = crypto.createHash('sha256');
