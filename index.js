@@ -66,12 +66,15 @@ class Connection extends EventEmmiter{
 
                 await this.subscribeToData()
                 this.schedulePing()
-            }catch(err){
-                console.error("ERR", err)
+            }catch(error){
+                logger.error(error)
                 this.ddpConnection.disconnect();
             }
         })
 
+        this.ddpConnection.on('error', (error) => {
+            logger.error(error)
+        });
 
         this.ddpConnection.on('disconnected', () => {
             clearInterval(this.setIntervalId)
