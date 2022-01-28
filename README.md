@@ -1,6 +1,6 @@
 # IoT Catalogue external service
 
-Allows the communication between a node application and IoT Catalogue through actuibs, and data subscription.
+Allows the communication between a node application and IoT Catalogue through actions and data subscription.
 
 ## Connection
 
