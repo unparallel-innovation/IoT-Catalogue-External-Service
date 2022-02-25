@@ -3,7 +3,6 @@ const EventEmmiter = require("events")
 const ws = require("ws");
 const SimpleDDP = require("simpleddp");
 const crypto = require("crypto");
-const axios = require('axios').default;
 const log4js = require("log4js");
 const logger = log4js.getLogger();
 logger.level = "debug";
@@ -56,9 +55,12 @@ class Connection extends EventEmmiter{
 
 
         this.ddpConnection = new SimpleDDP(opts,[simpleDDPLogin])
+
+
+
+
         this.ddpConnection.on("connected",async (info)=>{
             logger.info("Connected to " +  this.socketAddress);
-            this.remoteUpSince = new Date((await this.ping()).upSince)
             try{
                 await this.ddpConnection.login({userToken:this.hashUserToken()})
                 await this.registerExternalServiceConnection()
@@ -113,39 +115,29 @@ class Connection extends EventEmmiter{
     }
 
 
-    async ping(){
-        const protocol = (this.socketAddressURL.protocol === "wss:" || this.socketAddressURL.protocol === "https:")?"https:":"http:"
-        const pingURL = protocol  +"//" + this.socketAddressURL.host + "/status"
-
-        const res = await axios.get(pingURL,{timeout:this.timeout*1000})
-        return res.data
-    }
 
     async schedulePing(){
 
         this.setIntervalId = setInterval(async ()=>{
-
-
             try{
-
-                const data = await this.ping()
-
-                if(data?.value!=="up" ){
+                const error = new Promise((resolve, reject) => {
+                    setTimeout(reject, this.timeout*1000, 'ping timeout');
+                });
+                const res = await  Promise.race([this.ddpConnection.call("externalServicePing"), error])
+                if(!res?.connectionEstablished){
                     logger.error("Ping failed reconnecting")
                     this.tryToReconnect()
-                }else{
-
-                    const connectionTime = this.remoteUpSince.getTime()
-                    const currentTime = new Date(data.upSince).getTime()
-                    if(currentTime > connectionTime ){
-                        logger.error("Ping failed reconnecting")
-                        this.tryToReconnect()
-                    }
                 }
+
             }catch(err){
                 logger.error("Ping failed reconnecting")
                 this.tryToReconnect()
+
             }
+
+
+
+
         },this.pingInterval*1000)
 
 
