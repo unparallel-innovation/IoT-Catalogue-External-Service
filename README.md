@@ -18,11 +18,11 @@ Provide the following parameters to establish a connection between Node app and 
 ```js
 const pdfExporterUserToken = "xxx"
 
-const connection = new Connection("https://www.iot-catalogue.com",pdfExporterUserToken,{documentType:"pdf"})
+const connection = new Connection("https://www.iot-catalogue.com",pdfExporterUserToken,{documentFormats:"pdf"})
 
 connection.onSubscribedToService((res)=>{
 	console.log("subscribedToService")
-	console.log(res) //{ serviceFound: true, props: { repositoryType: 'github' }, name: 'analyse github'}
+	console.log(res) //{ serviceFound: true, props: { documentFormats: ["pdf"] }, name: 'Export PDF'}
 })
 
 connection.on("actionAdded",(obj,callback)=>{
