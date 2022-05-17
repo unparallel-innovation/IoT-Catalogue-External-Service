@@ -31,7 +31,6 @@ const EventEmmiter = require("events")
 const ws = require("ws");
 const SimpleDDP = require("simpleddp");
 const crypto = require("crypto");
-const axios = require('axios').default;
 const log4js = require("log4js");
 const logger = log4js.getLogger();
 logger.level = "debug";
@@ -59,6 +58,7 @@ class Connection extends EventEmmiter{
      */
     constructor(socketAddress, token,  serviceDescription, connectionProps) {
         super();
+
         this.socketAddress = socketAddress
         this.socketAddressURL = new URL(this.socketAddress)
         this.token = token
@@ -66,8 +66,9 @@ class Connection extends EventEmmiter{
         this.connectionProps = connectionProps
         this.collectionHandlers = []
         this.collectionSubscription = []
-        this.pingInterval = 3
+        this.pingInterval = 60
         this.timeout = 60
+        this.waitForServerInterval = 10
         if(! this.socketAddress){
             throw {"err":"Missing socketAddress"}
         }
@@ -84,21 +85,31 @@ class Connection extends EventEmmiter{
 
 
         this.ddpConnection = new SimpleDDP(opts,[simpleDDPLogin])
+
+
+
+
         this.ddpConnection.on("connected",async (info)=>{
             logger.info("Connected to " +  this.socketAddress);
-            this.remoteUpSince = new Date((await this.ping()).upSince)
             try{
+                await this.waitForServer()
+
+
                 await this.ddpConnection.login({userToken:this.hashUserToken()})
-                await this.getConnectionService()
-                await this.subscribeToExternalServiceCommunication()
+                await this.registerExternalServiceConnection()
+
+
                 await this.subscribeToData()
                 this.schedulePing()
-            }catch(err){
-                console.error("ERR", err)
+            }catch(error){
+                logger.error(error)
                 this.ddpConnection.disconnect();
             }
         })
 
+        this.ddpConnection.on('error', (error) => {
+            logger.error(error)
+        });
 
         this.ddpConnection.on('disconnected', () => {
             clearInterval(this.setIntervalId)
@@ -110,6 +121,12 @@ class Connection extends EventEmmiter{
                 this.actionSub.remove()
                 this.actionSub = null;
             }
+
+            if(this.activeConnectionSub ){
+                this.activeConnectionSub.remove();
+                this.activeConnectionSub = null;
+            }
+
             for(const collectionSubscription of this.collectionSubscription){
                 collectionSubscription.remove()
             }
@@ -124,6 +141,18 @@ class Connection extends EventEmmiter{
 
 
     }
+    async waitForServer(){
+        const {isServerReady} = await this.ddpConnection.call("getServerState")
+        if(!isServerReady){
+            logger.info("Server not ready, waiting " + this.waitForServerInterval + "s")
+            await new Promise(resolve=>setTimeout(resolve,this.waitForServerInterval*1000))
+            return this.waitForServer()
+        }else{
+            logger.info("Server ready")
+        }
+    }
+
+
 
     tryToReconnect(){
         this.ddpConnection.disconnect();
@@ -131,39 +160,29 @@ class Connection extends EventEmmiter{
     }
 
 
-    async ping(){
-        const protocol = (this.socketAddressURL.protocol === "wss:" || this.socketAddressURL.protocol === "https:")?"https:":"http:"
-        const pingURL = protocol  +"//" + this.socketAddressURL.host + "/status"
-
-        const res = await axios.get(pingURL,{timeout:this.timeout*1000})
-        return res.data
-    }
 
     async schedulePing(){
 
         this.setIntervalId = setInterval(async ()=>{
-
-
             try{
-
-                const data = await this.ping()
-
-                if(data?.value!=="up" ){
+                const error = new Promise((resolve, reject) => {
+                    setTimeout(reject, this.timeout*1000, 'ping timeout');
+                });
+                const res = await  Promise.race([this.ddpConnection.call("externalServicePing"), error])
+                if(!res?.connectionEstablished){
                     logger.error("Ping failed reconnecting")
                     this.tryToReconnect()
-                }else{
-
-                    const connectionTime = this.remoteUpSince.getTime()
-                    const currentTime = new Date(data.upSince).getTime()
-                    if(currentTime > connectionTime ){
-                        logger.error("Ping failed reconnecting")
-                        this.tryToReconnect()
-                    }
                 }
+
             }catch(err){
                 logger.error("Ping failed reconnecting")
                 this.tryToReconnect()
+
             }
+
+
+
+
         },this.pingInterval*1000)
 
 
@@ -186,12 +205,16 @@ class Connection extends EventEmmiter{
             if (obj.added) {
                 actions.push("added")
                 if(obj.added.state === "added"){
+
+
                     this.emit("actionAdded",
                         obj.added,
                         (result, error)=>{
                             this.actionCallback(obj.added, result, error)
                         }
                     )
+
+
                 }
 
             }
@@ -225,6 +248,9 @@ class Connection extends EventEmmiter{
         }
 
     }
+
+
+
     async subscribeToCollection(collectionName){
         const fields = this.connectionProps?.dataFields || this.connectionProps?.fields
 
@@ -241,6 +267,30 @@ class Connection extends EventEmmiter{
         await this.actionSub.ready()
     }
 
+    async registerExternalServiceConnection(){
+        this.observeCollection("externalServiceActiveConnections",(collectionName, obj)=>{
+            const res = this.checkNewConnectionState(obj,"serviceAssigned")
+
+            if(res){
+                this.emit("subscribedToService",res.externalService)
+                this.subscribeToExternalServiceCommunication()
+            }
+
+        })
+        this.activeConnectionSub = this.ddpConnection.subscribe("registerExternalServiceConnection",this.serviceDescription)
+        await this.activeConnectionSub.ready()
+
+    }
+
+    checkNewConnectionState(obj, state){
+        if(obj.changed?.prev?.state !== obj.changed?.next?.state  &amp;&amp; obj.changed?.next?.state === state){
+            return obj.changed.next
+        }
+
+        if(obj.added?.state === state){
+            return obj.added
+        }
+    }
 
     actionCallback(obj, result, error){
 
@@ -250,12 +300,6 @@ class Connection extends EventEmmiter{
 
     }
 
-    async getConnectionService(){
-        const connectionService = await this.ddpConnection.call("getConnectionService", this.serviceDescription)
-        if(connectionService.serviceFound === true){
-            this.emit("subscribedToService",connectionService)
-        }
-    }
 
     hashUserToken(){
         const hash = crypto.createHash('sha256');
@@ -396,7 +440,7 @@ exports.Connection = Connection
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.6</a> on Mon Oct 25 2021 17:30:19 GMT+0100 (Western European Summer Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.6</a> on Fri May 13 2022 16:15:57 GMT+0100 (Western European Summer Time)
 </footer>
 
 <script> prettyPrint(); </script>

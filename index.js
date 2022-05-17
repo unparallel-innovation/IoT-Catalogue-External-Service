@@ -39,6 +39,7 @@ class Connection extends EventEmmiter{
         this.collectionSubscription = []
         this.pingInterval = 60
         this.timeout = 60
+        this.waitForServerInterval = 10
         if(! this.socketAddress){
             throw {"err":"Missing socketAddress"}
         }
@@ -62,10 +63,9 @@ class Connection extends EventEmmiter{
         this.ddpConnection.on("connected",async (info)=>{
             logger.info("Connected to " +  this.socketAddress);
             try{
+                await this.waitForServer()
                 await this.ddpConnection.login({userToken:this.hashUserToken()})
                 await this.registerExternalServiceConnection()
-
-
                 await this.subscribeToData()
                 this.schedulePing()
             }catch(error){
@@ -108,6 +108,18 @@ class Connection extends EventEmmiter{
 
 
     }
+    async waitForServer(){
+        const {isServerReady} = await this.ddpConnection.call("getServerState")
+        if(!isServerReady){
+            logger.info("Server not ready, waiting " + this.waitForServerInterval + "s")
+            await new Promise(resolve=>setTimeout(resolve,this.waitForServerInterval*1000))
+            return this.waitForServer()
+        }else{
+            logger.info("Server ready")
+        }
+    }
+
+
 
     tryToReconnect(){
         this.ddpConnection.disconnect();
@@ -167,7 +179,6 @@ class Connection extends EventEmmiter{
                         }
                     )
                 }
-
             }
             if(obj.changed) {
                 actions.push("changed")
