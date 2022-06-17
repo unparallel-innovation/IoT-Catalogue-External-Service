@@ -122,6 +122,7 @@ class Connection extends EventEmmiter{
 
 
     tryToReconnect(){
+        logger.info("Reconnecting")
         this.ddpConnection.disconnect();
         this.ddpConnection.connect()
     }
@@ -133,16 +134,17 @@ class Connection extends EventEmmiter{
         this.setIntervalId = setInterval(async ()=>{
             try{
                 const error = new Promise((resolve, reject) => {
-                    setTimeout(reject, this.timeout*1000, 'ping timeout');
+                    setTimeout(reject, this.timeout*1000, {reason:'ping timeout', timeout:true});
                 });
                 const res = await  Promise.race([this.ddpConnection.call("externalServicePing"), error])
                 if(!res?.connectionEstablished){
-                    logger.error("Ping failed reconnecting")
+                    logger.error("Ping failed: connection not established with IoT Catalogue")
                     this.tryToReconnect()
                 }
 
             }catch(err){
-                logger.error("Ping failed reconnecting")
+                logger.error("Ping failed",err)
+
                 this.tryToReconnect()
 
             }
