@@ -64,7 +64,8 @@ class Connection extends EventEmmiter{
             logger.info("Connected to " +  this.socketAddress);
             try{
                 await this.waitForServer()
-                await this.ddpConnection.login({userToken:this.hashUserToken()})
+                const user =  await this.ddpConnection.login({userToken:this.hashUserToken()})
+                this.emit("loggedIn",user);
                 await this.registerExternalServiceConnection()
                 await this.subscribeToData()
                 this.schedulePing()
@@ -177,7 +178,7 @@ class Connection extends EventEmmiter{
                     this.emit("actionAdded",
                         obj.added,
                         (result, error)=>{
-                            this.actionCallback(obj.added, result, error)
+                            return this.actionCallback(obj.added, result, error)
                         }
                     )
                 }
@@ -257,11 +258,7 @@ class Connection extends EventEmmiter{
     }
 
     actionCallback(obj, result, error){
-
-        this.ddpConnection.call("actionCallback",obj.id, result, error)
-
-
-
+        return this.ddpConnection.call("actionCallback",obj.id, result, error)
     }
 
 
@@ -337,6 +334,14 @@ class Connection extends EventEmmiter{
      */
     onSubscribedToService(callback){
         return this.on("subscribedToService",callback)
+    }
+
+    /**
+     *
+     * @param {onLoggedInCallback}
+     */
+    onLoggedIn(callback){
+        return this.on("loggedIn",callback)
     }
 
     /**
